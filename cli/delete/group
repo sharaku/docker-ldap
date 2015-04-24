@@ -1,0 +1,67 @@
+#!/bin/sh
+#
+# env  
+#
+# LDAP_DOMAIN			ldap domain
+# LDAP_ADMIN_PWD		ldap admin passwd
+# LDAP_ORGANISATION		orignation
+######################################################################
+# 
+
+getBaseDn () {
+  IFS="."
+  export IFS
+
+  domain=$1
+  init=1
+
+  for s in $domain; do
+    dc="dc=$s"
+    if [ "$init" -eq 1 ]; then
+      baseDn=$dc
+      init=0
+    else
+      baseDn="$baseDn,$dc"
+    fi
+  done
+  IFS=" "
+}
+
+usage () {
+  echo "delete user -name username"
+  exit 1
+}
+
+#######################################################################
+# デフォルトを設定する
+LDAP_ADD_NAME=
+LDAP_GROUP_ID=
+
+#######################################################################
+# 引数を変換する
+# -name
+for OPT in $*
+do
+  case $OPT in
+    '-name' )
+      LDAP_ADD_NAME=${2}
+      shift 2
+      ;;
+  esac
+done
+
+getBaseDn ${LDAP_DOMAIN}
+LDAP_BASE_DN=$baseDn
+LDAP_ADMIN="cn=admin,$baseDn"
+
+
+# 削除するグループが使用されていないか確認する
+LDAP_GROUP_ID=`ldapsearch -x -b "ou=Groups,${LDAP_BASE_DN}"  -s sub cn=${LDAP_ADD_NAME} | grep -w "^gidNumber:" | cut -d ' ' -f 2`
+used_count=`ldapsearch -x -b "ou=People,${LDAP_BASE_DN}"  -s sub gidNumber=${LDAP_GROUP_ID} | grep -w "^uid:" | wc -l`
+
+if [ ${used_count} -eq 0 ]; then 
+  ldapdelete -x -w ${LDAP_ADMIN_PWD} -D ${LDAP_ADMIN} "cn=${LDAP_ADD_NAME},ou=Groups,${LDAP_BASE_DN}"
+else
+  echo "ERROR: group is used."
+fi
+

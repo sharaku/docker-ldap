@@ -1,0 +1,2 @@
+delete group	Delete a group.
+delete user	Delete a user.

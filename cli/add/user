@@ -1,0 +1,177 @@
+#!/bin/sh
+#
+# env  
+#
+# LDAP_DOMAIN			ldap domain
+# LDAP_ADMIN_PWD		ldap admin passwd
+# LDAP_ORGANISATION		orignation
+######################################################################
+# 
+
+getBaseDn () {
+  IFS="."
+  export IFS
+
+  domain=$1
+  init=1
+
+  for s in $domain; do
+    dc="dc=$s"
+    if [ "$init" -eq 1 ]; then
+      baseDn=$dc
+      init=0
+    else
+      baseDn="$baseDn,$dc"
+    fi
+  done
+  IFS=" "
+}
+
+usage () {
+  echo "add user -name username -passwd passwd -uid uid -group group_name -sn sn -email email[-home home_dir] [-shell login_shell]"
+  echo "    -name username            "
+  echo "    -passwd passwd            "
+  echo "    -uid uid                  "
+  echo "    -group group_name         "
+  echo "    -email email              "
+  echo "    -sn sn                    "
+  echo "    -home home_dir            "
+  echo "    -shell lgin_shell         "
+  exit 1
+}
+
+#######################################################################
+# デフォルトを設定する
+LDAP_ADD_NAME=
+LDAP_ADD_PASSWD=
+LDAP_ADD_HOME=
+LDAP_ADD_SHELL=/sbin/nologin
+LDAP_ADD_UID=
+LDAP_ADD_GNAME=
+LDAP_ADD_CN=
+LDAP_ADD_SN=
+LDAP_ADD_DISPLAYNAME=
+LDAP_ADD_MAIL=
+
+#######################################################################
+# 引数を変換する
+# -name
+# -passwd
+# -home
+# -shell
+# -uid
+# -group
+# -cn
+# -sn
+# -displayname
+# -email
+for OPT in $*
+do
+  case $OPT in
+    '-name' )
+      LDAP_ADD_NAME=${2}
+      shift 2
+      ;;
+    '-passwd' )
+      LDAP_ADD_PASSWD=${2}
+      shift 2
+      ;;
+    '-uid' )
+      LDAP_ADD_UID=${2}
+      shift 2
+      ;;
+    '-sn' )
+      LDAP_ADD_SN=${2}
+      shift 2
+      ;;
+    '-email' )
+      LDAP_ADD_MAIL=${2}
+      shift 2
+      ;;
+    '-home' )
+      LDAP_ADD_HOME=${2}
+      shift 2
+      ;;
+    '-shell' )
+      LDAP_ADD_SHELL=${2}
+      shift 2
+      ;;
+    '-group' )
+      LDAP_ADD_GNAME=${2}
+      shift 2
+      ;;
+    '-cn' )
+      LDAP_ADD_CN=${2}
+      shift 2
+      ;;
+    '-displayname' )
+      LDAP_ADD_DISPLAYNAME=${2}
+      shift 2
+      ;;
+  esac
+done
+
+# 必須オプションのチェック
+if [ -z "$LDAP_ADD_NAME" ]; then
+    usage
+    exit
+fi
+if [ -z "$LDAP_ADD_PASSWD" ]; then
+    usage
+    exit
+fi
+if [ -z "$LDAP_ADD_UID" ]; then
+    usage
+    exit
+fi
+if [ -z "$LDAP_ADD_SN" ]; then
+    usage
+    exit
+fi
+if [ -z "$LDAP_ADD_GNAME" ]; then
+    usage
+    exit
+fi
+
+getBaseDn ${LDAP_DOMAIN}
+LDAP_BASE_DN=$baseDn
+LDAP_ADMIN="cn=admin,$baseDn"
+
+# gidを変換する
+LDAP_ADD_GID=`ldapsearch -x -w ${LDAP_ADMIN_PWD} -D ${LDAP_ADMIN} -b ${LDAP_BASE_DN} "cn=${LDAP_ADD_GNAME}" | grep -w "^gidNumber:" | cut -d":" -f 2 | cut -d" " -f 2`
+
+if [ -z "$LDAP_ADD_GID" ]; then
+    usage
+    exit
+fi
+
+# homeが設定されていなければ/home/${LDAP_ADD_NAME}とする
+if [ -n  "$LDAP_ADD_HOME" ]; then
+    LDAP_ADD_HOME=/home/${LDAP_ADD_NAME}
+fi
+
+
+######################################################################
+# 
+cat << EOF | ldapadd -x -w ${LDAP_ADMIN_PWD} -D ${LDAP_ADMIN}
+dn: uid=${LDAP_ADD_NAME},ou=People,${LDAP_BASE_DN}
+objectclass: posixAccount
+objectclass: top
+objectclass: shadowAccount
+objectclass: inetOrgPerson
+cn: ${LDAP_ADD_NAME}
+sn: ${LDAP_ADD_SN}
+gecos: ${LDAP_ADD_NAME},,,
+gidNumber: ${LDAP_ADD_GID}
+homeDirectory: ${LDAP_ADD_HOME}
+loginShell: ${LDAP_ADD_SHELL}
+userPassword: 
+shadowLastChange: 15971
+shadowMax: 99999
+shadowWarning: 7
+uidNumber: ${LDAP_ADD_UID}
+uid: ${LDAP_ADD_NAME}
+mail: ${LDAP_ADD_MAIL}
+EOF
+
+ldappasswd -w ${LDAP_ADMIN_PWD} -D ${LDAP_ADMIN} -s ${LDAP_ADD_PASSWD} "uid=${LDAP_ADD_NAME},ou=People,${LDAP_BASE_DN}"

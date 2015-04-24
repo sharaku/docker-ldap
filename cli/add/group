@@ -1,0 +1,80 @@
+#!/bin/sh
+#
+# env  
+#
+# LDAP_DOMAIN			ldap domain
+# LDAP_ADMIN_PWD		ldap admin passwd
+# LDAP_ORGANISATION		orignation
+######################################################################
+# 
+
+getBaseDn () {
+  IFS="."
+  export IFS
+
+  domain=$1
+  init=1
+
+  for s in $domain; do
+    dc="dc=$s"
+    if [ "$init" -eq 1 ]; then
+      baseDn=$dc
+      init=0
+    else
+      baseDn="$baseDn,$dc"
+    fi
+  done
+  IFS=" "
+}
+
+usage () {
+  echo "add group -name groupname -gid gid"
+  echo "    -name groupname   : Group name that you want to add."
+  echo "    -gid  gid         : GID of the group to which you want to add."
+  exit 1
+}
+
+#######################################################################
+# デフォルトを設定する
+LDAP_ADD_NAME=
+LDAP_ADD_GID=
+
+#######################################################################
+# 引数を変換する
+# -name
+# -gid
+for OPT in $*
+do
+  case $OPT in
+    '-name' )
+      LDAP_ADD_NAME=${2}
+      shift 2
+      ;;
+    '-gid' )
+      LDAP_ADD_GID=${2}
+      shift 2
+      ;;
+  esac
+done
+
+# 必須オプションのチェック
+if [ -z "$LDAP_ADD_NAME" ]; then
+    usage
+fi
+if [ -z "$LDAP_ADD_GID" ]; then
+    usage
+fi
+
+getBaseDn ${LDAP_DOMAIN}
+LDAP_BASE_DN=$baseDn
+LDAP_ADMIN="cn=admin,$baseDn"
+
+######################################################################
+# 
+cat << EOF | ldapadd -x -w ${LDAP_ADMIN_PWD} -D ${LDAP_ADMIN}
+dn: cn=${LDAP_ADD_NAME},ou=Groups,${LDAP_BASE_DN}
+objectClass: posixGroup
+cn: ${LDAP_ADD_NAME}
+gidNumber: ${LDAP_ADD_GID}
+EOF
+

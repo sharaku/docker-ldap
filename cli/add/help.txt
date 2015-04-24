@@ -1,0 +1,2 @@
+add group	Add a new group.
+add user	Add a new user.

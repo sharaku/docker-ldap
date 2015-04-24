@@ -1,0 +1,2 @@
+show groups	Show the groups that are registered.
+show users	Show the users that are registered.
