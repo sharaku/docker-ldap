@@ -3,8 +3,6 @@ add user	Add a new user.
 delete group	Delete a group.
 delete user	Delete a user.
 help	Show the help
-set group	Setting a group.
 set passwd	Password change of user.
-set user	Setting a user.
 show groups	Show the groups that are registered.
-show userss	Show the users that are registered.
+show users	Show the users that are registered.
